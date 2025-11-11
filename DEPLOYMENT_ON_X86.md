@@ -66,6 +66,25 @@ python webapp/app.py
 python scripts/process_photos.py
 ```
 
+### 5. Configure OCR Languages
+
+The OCR worker now respects an `OCR_LANG` setting (default `ch` for mixed Chinese/English).
+
+1. Update `.env` and add `OCR_LANG=<paddle-lang-code>` (e.g. `en`, `ch`, `japan`).
+2. Restart Celery workers so the PaddleOCR model reloads with the new language.
+3. If you switch languages after processing images, refresh OCR data:
+
+```bash
+# From the PostgreSQL shell
+DELETE FROM ocr_texts;
+UPDATE photos SET state = 'pending' WHERE state IN ('completed', 'partial');
+
+# Requeue processing to regenerate OCR text
+python scripts/process_photos.py
+```
+
+This ensures the full-text search vector is rebuilt with the correct language configuration.
+
 ---
 
 ## Dependencies That Need x86_64

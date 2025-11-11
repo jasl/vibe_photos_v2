@@ -42,6 +42,68 @@ def update_photo_state(session, photo_id: int, state: PhotoState, error_message:
         logger.info(f"Photo {photo_id} state: {state.value}")
 
 
+def _determine_tsvector_config(language_code: Optional[str]) -> str:
+    """Map OCR language code to PostgreSQL text search configuration."""
+
+    if not language_code:
+        return "simple"
+
+    normalized = language_code.lower()
+    language_map = {
+        "en": "english",
+        "english": "english",
+    }
+
+    return language_map.get(normalized, "simple")
+
+
+def _store_ocr_text(session, photo_id: int, extracted_text: str, language_code: str) -> OCRText:
+    """Persist OCR text and update full-text search vector."""
+
+    ocr_record = OCRText(
+        photo_id=photo_id,
+        extracted_text=extracted_text,
+        language=language_code,
+    )
+    session.add(ocr_record)
+    session.flush()
+
+    ts_config = _determine_tsvector_config(language_code)
+    session.execute(
+        text(
+            "UPDATE ocr_texts SET ts_vector = to_tsvector(:config::regconfig, :text) "
+            "WHERE photo_id = :photo_id"
+        ),
+        {"config": ts_config, "text": extracted_text, "photo_id": photo_id},
+    )
+    session.commit()
+
+    logger.debug(
+        "Stored OCR text for photo %s (lang=%s, ts_config=%s)",
+        photo_id,
+        language_code,
+        ts_config,
+    )
+
+    return ocr_record
+
+
+def _process_ocr(session, photo: Photo, image_path: str, results: dict) -> None:
+    """Run OCR extraction and persist results."""
+
+    extracted_text = ai_models.extract_text(image_path)
+    ocr_language = settings.OCR_LANG
+
+    if extracted_text and extracted_text.strip():
+        _store_ocr_text(session, photo.id, extracted_text, ocr_language)
+        results.setdefault('steps_completed', []).append('ocr')
+        results['ocr_text_length'] = len(extracted_text)
+        logger.info(f"✓ Extracted text: {len(extracted_text)} characters")
+    else:
+        logger.info("No text detected in image")
+        results.setdefault('steps_completed', []).append('ocr')
+
+
 @app.task(base=PhotoProcessingTask, bind=True, name='process_single_image')
 def process_single_image(self, photo_id: int):
     """
@@ -179,36 +241,9 @@ def process_single_image(self, photo_id: int):
         # Step 4: OCR (PaddleOCR)
         try:
             update_photo_state(session, photo_id, PhotoState.PROCESSING_OCR)
-            
-            extracted_text = ai_models.extract_text(image_path)
-            
-            if extracted_text and len(extracted_text.strip()) > 0:
-                # Create ts_vector for full-text search
-                ocr_text = OCRText(
-                    photo_id=photo_id,
-                    extracted_text=extracted_text,
-                    language='en'
-                )
-                session.add(ocr_text)
-                session.flush()
-                
-                # Update ts_vector using PostgreSQL function
-                session.execute(
-                    text(
-                        "UPDATE ocr_texts SET ts_vector = to_tsvector('english', :text) "
-                        "WHERE photo_id = :photo_id"
-                    ),
-                    {'text': extracted_text, 'photo_id': photo_id}
-                )
-                session.commit()
-                
-                results['ocr_text_length'] = len(extracted_text)
-                results['steps_completed'].append('ocr')
-                logger.info(f"✓ Extracted text: {len(extracted_text)} characters")
-            else:
-                logger.info("No text detected in image")
-                results['steps_completed'].append('ocr')
-            
+
+            _process_ocr(session, photo, image_path, results)
+
         except Exception as e:
             logger.error(f"✗ OCR failed: {e}")
             results['steps_failed'].append('ocr')
