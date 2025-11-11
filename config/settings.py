@@ -80,6 +80,7 @@ class Settings:
     OPENCLIP_MODEL_NAME: str = "ViT-H-14"
     OPENCLIP_PRETRAINED: str = "laion2b_s32b_b79k"
     INSIGHTFACE_MODEL_NAME: str = "buffalo_l"
+    OCR_LANG: str = os.getenv("OCR_LANG", "ch").lower()
     
     # Search Configuration
     SEARCH_TOP_K: int = int(os.getenv("SEARCH_TOP_K", "100"))

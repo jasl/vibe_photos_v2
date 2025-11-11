@@ -112,9 +112,15 @@ def _load_paddleocr_model() -> None:
     try:
         # Note: ONNX Runtime doesn't support CUDA 13 yet, so PaddleOCR will
         # automatically fall back to CPU if CUDA is unavailable for ONNX
-        _models_cache['ocr_model'] = PaddleOCR(lang='en')
-        
-        logger.info(f"✓ PaddleOCR model loaded (ONNX will use CPU if CUDA 13 incompatible)")
+        lang_code = settings.OCR_LANG
+        use_angle_cls = lang_code != 'en'
+        _models_cache['ocr_model'] = PaddleOCR(lang=lang_code, use_angle_cls=use_angle_cls)
+
+        logger.info(
+            "✓ PaddleOCR model loaded (lang=%s, angle_cls=%s; ONNX will use CPU if CUDA 13 incompatible)",
+            lang_code,
+            use_angle_cls,
+        )
         
     except Exception as e:
         logger.error(f"✗ Failed to load PaddleOCR model: {e}")
