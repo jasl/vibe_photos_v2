@@ -131,6 +131,9 @@ python -c "from models import init_db; init_db()"
 
 # Seed categories and tag mappings
 python scripts/seed_categories.py
+
+# For existing deployments, backfill any new categories/tags
+python scripts/update_tag_category_mappings.py
 ```
 
 **Expected output:**
@@ -140,6 +143,21 @@ python scripts/seed_categories.py
 ✓ Created category: food
 ...
 ```
+
+### Category reference
+
+The system groups DETR/COCO detections into the following categories for easier filtering:
+
+| Category | Example tags |
+| --- | --- |
+| electronics | `iPhone`, `laptop`, `cell phone`, `tv`, `remote control` |
+| food | `pizza`, `sushi`, `bowl`, `banana`, `hot dog` |
+| landscape | `mountain`, `beach`, `forest`, `sunset`, `waterfall` |
+| documents | `document`, `receipt`, `invoice`, `presentation`, `chart` |
+| people | `person`, `selfie`, `group`, `wedding`, `portrait` |
+| vehicles | `car`, `bus`, `truck`, `train`, `airplane` |
+
+Run `python scripts/update_tag_category_mappings.py` after pulling updates that introduce new tags or categories. The script is idempotent and only inserts missing mappings, so it is safe to re-run whenever needed.
 
 ### Step 7: Start Celery Worker
 

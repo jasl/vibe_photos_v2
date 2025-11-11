@@ -14,7 +14,8 @@ SEED_DATA = {
             "iPhone", "iPad", "MacBook", "laptop", "computer", "phone", "camera",
             "tablet", "headphones", "monitor", "keyboard", "mouse", "smartphone",
             "smartwatch", "earbuds", "speaker", "screen", "display", "device",
-            "electronics", "gadget", "technology", "tech"
+            "electronics", "gadget", "technology", "tech", "cell phone", "tv",
+            "remote", "remote control"
         ]
     },
     "food": {
@@ -23,7 +24,8 @@ SEED_DATA = {
             "pizza", "burger", "coffee", "cake", "pasta", "sushi", "salad",
             "beverage", "fruit", "bread", "dessert", "meal", "breakfast",
             "lunch", "dinner", "snack", "sandwich", "soup", "rice", "noodles",
-            "tea", "juice", "food", "drink", "restaurant", "dish", "plate"
+            "tea", "juice", "food", "drink", "restaurant", "dish", "plate",
+            "bowl", "banana", "apple", "orange", "broccoli", "carrot", "hot dog"
         ]
     },
     "landscape": {
@@ -51,6 +53,14 @@ SEED_DATA = {
             "people", "man", "woman", "child", "baby", "friend", "couple",
             "team", "gathering", "party", "meeting", "wedding", "smile",
             "human", "individual"
+        ]
+    },
+    "vehicles": {
+        "description": "Cars, public transport, and other vehicles",
+        "tags": [
+            "car", "bus", "truck", "train", "airplane", "boat", "bicycle",
+            "motorcycle", "scooter", "van", "taxi", "transport", "vehicle",
+            "traffic", "jeep", "pickup", "race car"
         ]
     }
 }
