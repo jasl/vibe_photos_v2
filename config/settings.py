@@ -56,6 +56,16 @@ class Settings:
         "jpg,jpeg,png,heic,webp,cr2,nef,dng,arw,raw"
     ).split(",")
 
+    # Object detection filtering
+    NOISY_DETECTION_TAGS: List[str] = [
+        tag.strip()
+        for tag in os.getenv("NOISY_DETECTION_TAGS", "person").split(",")
+        if tag.strip()
+    ]
+    NOISY_TAG_MIN_AREA_RATIO: float = float(os.getenv("NOISY_TAG_MIN_AREA_RATIO", "0.02"))
+    NOISY_TAG_MIN_CONFIDENCE: float = float(os.getenv("NOISY_TAG_MIN_CONFIDENCE", "0.35"))
+    NOISY_TAG_MAX_INSTANCES: int = int(os.getenv("NOISY_TAG_MAX_INSTANCES", "3"))
+
     # Flask Configuration
     FLASK_ENV: str = os.getenv("FLASK_ENV", "development")
     FLASK_DEBUG: bool = os.getenv("FLASK_DEBUG", "True").lower() in ("true", "1", "yes")
