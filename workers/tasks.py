@@ -12,7 +12,7 @@ from sqlalchemy import text
 from workers.celery_app import app
 from workers import ai_models
 from models import (
-    Photo, DetectedObject, SemanticEmbedding, OCRText,
+    Photo, DetectedObject, PhotoTag, SemanticEmbedding, OCRText,
     Face, PhotoHash, Duplicate, TagCategoryMapping,
     PhotoState, get_session
 )
@@ -106,27 +106,46 @@ def process_single_image(self, photo_id: int):
             
             detected_objects = ai_models.recognize_objects(image)
             
-            # Store detected objects with category mapping
+            # Deduplicate tags for PhotoTag (keep highest confidence per tag)
+            unique_tags = {}
             for obj in detected_objects:
                 tag = obj['tag']
-                confidence = obj['confidence']
-                
-                # Find category for this tag
+                if tag not in unique_tags or obj['confidence'] > unique_tags[tag]['confidence']:
+                    unique_tags[tag] = obj
+            
+            # Find category for tags (do this once for all tags)
+            tag_category_map = {}
+            for tag in unique_tags.keys():
                 tag_mapping = session.query(TagCategoryMapping).filter_by(tag=tag).first()
-                category_id = tag_mapping.category_id if tag_mapping else None
-                
+                tag_category_map[tag] = tag_mapping.category_id if tag_mapping else None
+            
+            # Save unique tags to PhotoTag
+            for tag, obj in unique_tags.items():
+                photo_tag = PhotoTag(
+                    photo_id=photo_id,
+                    tag=tag,
+                    confidence=obj['confidence'],
+                    category_id=tag_category_map[tag]
+                )
+                session.add(photo_tag)
+            
+            # Save all instances to DetectedObject (with bbox)
+            for obj in detected_objects:
+                tag = obj['tag']
                 detected_obj = DetectedObject(
                     photo_id=photo_id,
                     tag=tag,
-                    confidence=confidence,
-                    category_id=category_id
+                    confidence=obj['confidence'],
+                    category_id=tag_category_map.get(tag),
+                    bbox=obj.get('bbox')  # DETR already returns this
                 )
                 session.add(detected_obj)
             
             session.commit()
             results['detected_objects_count'] = len(detected_objects)
+            results['unique_tags_count'] = len(unique_tags)
             results['steps_completed'].append('objects')
-            logger.info(f"✓ Detected {len(detected_objects)} objects")
+            logger.info(f"✓ Detected {len(detected_objects)} objects ({len(unique_tags)} unique tags)")
             
         except Exception as e:
             logger.error(f"✗ Object recognition failed: {e}")

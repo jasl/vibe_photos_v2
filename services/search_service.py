@@ -10,7 +10,7 @@ from sqlalchemy import func, or_, and_, text
 from sqlalchemy.orm import Session
 
 from models import (
-    Photo, DetectedObject, OCRText, SemanticEmbedding,
+    Photo, DetectedObject, PhotoTag, OCRText, SemanticEmbedding,
     Category, PhotoState, get_session
 )
 from workers import ai_models
@@ -97,11 +97,11 @@ def keyword_search(
         
         # Build base query for tag search
         tag_query = session.query(
-            DetectedObject.photo_id,
-            func.avg(DetectedObject.confidence).label('rank')
+            PhotoTag.photo_id,
+            PhotoTag.confidence.label('rank')
         ).filter(
-            DetectedObject.tag.ilike(f'%{query}%')
-        ).group_by(DetectedObject.photo_id)
+            PhotoTag.tag.ilike(f'%{query}%')
+        )
         
         # Apply category filter to tag query
         if categories:
@@ -111,7 +111,7 @@ def keyword_search(
             category_ids = [cid[0] for cid in category_ids]
             
             if category_ids:
-                tag_query = tag_query.filter(DetectedObject.category_id.in_(category_ids))
+                tag_query = tag_query.filter(PhotoTag.category_id.in_(category_ids))
         
         # Combine OCR and tag results
         ocr_results = {photo_id: rank for photo_id, rank in ocr_query.all()}
@@ -214,9 +214,9 @@ def semantic_search(
             category_ids = [cid[0] for cid in category_ids]
             
             if category_ids:
-                # Filter photos that have detected objects in these categories
-                photo_ids_in_categories = session.query(DetectedObject.photo_id).filter(
-                    DetectedObject.category_id.in_(category_ids)
+                # Filter photos that have tags in these categories
+                photo_ids_in_categories = session.query(PhotoTag.photo_id).filter(
+                    PhotoTag.category_id.in_(category_ids)
                 ).distinct().all()
                 photo_ids_in_categories = [pid[0] for pid in photo_ids_in_categories]
                 
@@ -308,8 +308,8 @@ def hybrid_search(
         results = []
         for photo in photos:
             # Get matched tags
-            matched_tags = session.query(DetectedObject.tag).filter(
-                DetectedObject.photo_id == photo.id
+            matched_tags = session.query(PhotoTag.tag).filter(
+                PhotoTag.photo_id == photo.id
             ).limit(5).all()
             matched_tags = [tag[0] for tag in matched_tags]
             
@@ -370,8 +370,40 @@ def get_photo_details(photo_id: int) -> Optional[Dict]:
         if not photo:
             return None
         
-        # Get detected objects
-        objects = session.query(DetectedObject).filter_by(photo_id=photo_id).all()
+        # Get photo tags with categories
+        tags = session.query(PhotoTag).filter_by(photo_id=photo_id).all()
+        
+        # Group tags by category
+        tags_by_category = {}
+        categories_list = []
+        
+        for tag in tags:
+            if tag.category:
+                category_name = tag.category.name
+                if category_name not in tags_by_category:
+                    tags_by_category[category_name] = []
+                    categories_list.append(tag.category)
+                tags_by_category[category_name].append(tag)
+            else:
+                # Uncategorized tags
+                if 'Uncategorized' not in tags_by_category:
+                    tags_by_category['Uncategorized'] = []
+                tags_by_category['Uncategorized'].append(tag)
+        
+        # Get detected objects grouped by category
+        detected_objects = session.query(DetectedObject).filter_by(photo_id=photo_id).all()
+        
+        objects_by_category = {}
+        for obj in detected_objects:
+            if obj.category:
+                category_name = obj.category.name
+                if category_name not in objects_by_category:
+                    objects_by_category[category_name] = []
+                objects_by_category[category_name].append(obj)
+            else:
+                if 'Uncategorized' not in objects_by_category:
+                    objects_by_category['Uncategorized'] = []
+                objects_by_category['Uncategorized'].append(obj)
         
         # Get OCR text
         ocr = session.query(OCRText).filter_by(photo_id=photo_id).first()
@@ -391,7 +423,11 @@ def get_photo_details(photo_id: int) -> Optional[Dict]:
         
         return {
             'photo': photo,
-            'detected_objects': objects,
+            'tags': tags,
+            'tags_by_category': tags_by_category,
+            'categories': categories_list,
+            'detected_objects': detected_objects,
+            'objects_by_category': objects_by_category,
             'ocr_text': ocr.extracted_text if ocr else None,
             'faces_count': faces_count,
             'has_duplicates': has_duplicates

@@ -13,8 +13,9 @@ import logging
 from flask import Flask, render_template, request, jsonify, send_file
 
 from config import settings
-from models import Photo, get_session, PhotoState, Category
+from models import Photo, get_session, PhotoState, Category, PhotoTag
 from services import hybrid_search, get_photo_details
+from sqlalchemy import func, distinct
 
 # Create Flask app
 app = Flask(__name__)
@@ -281,6 +282,218 @@ def api_search():
     except Exception as e:
         logger.error(f"Error in search API: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/categories')
+def categories_list():
+    """Categories list page showing all categories with photo counts."""
+    session = None
+    try:
+        session = get_session()
+        
+        # Get categories with photo counts (only non-empty categories)
+        categories = session.query(
+            Category,
+            func.count(distinct(PhotoTag.photo_id)).label('photo_count')
+        ).join(
+            PhotoTag, Category.id == PhotoTag.category_id
+        ).join(
+            Photo, PhotoTag.photo_id == Photo.id
+        ).filter(
+            Photo.state == PhotoState.COMPLETED
+        ).group_by(Category.id).having(
+            func.count(distinct(PhotoTag.photo_id)) > 0
+        ).order_by(Category.name).all()
+        
+        # Close session before rendering
+        session.close()
+        session = None
+        
+        return render_template('categories.html', categories=categories)
+        
+    except Exception as e:
+        logger.error(f"Error in categories route: {e}")
+        return render_template('error.html', error=str(e)), 500
+    finally:
+        if session:
+            try:
+                session.close()
+            except:
+                pass
+
+
+@app.route('/categories/<category_name>')
+def category_detail(category_name):
+    """Category detail page showing photos for a specific category."""
+    session = None
+    try:
+        page = request.args.get('page', 1, type=int)
+        page_size = settings.GALLERY_PAGE_SIZE
+        
+        session = get_session()
+        
+        # Get category
+        category = session.query(Category).filter(
+            Category.name == category_name
+        ).first()
+        
+        if not category:
+            return render_template('error.html', error='Category not found'), 404
+        
+        # Get total count
+        total_photos = session.query(func.count(distinct(Photo.id))).join(
+            PhotoTag, Photo.id == PhotoTag.photo_id
+        ).filter(
+            PhotoTag.category_id == category.id,
+            Photo.state == PhotoState.COMPLETED
+        ).scalar()
+        
+        # Get paginated photos
+        photos = session.query(Photo).join(
+            PhotoTag, Photo.id == PhotoTag.photo_id
+        ).filter(
+            PhotoTag.category_id == category.id,
+            Photo.state == PhotoState.COMPLETED
+        ).distinct().order_by(Photo.created_at.desc()).offset(
+            (page - 1) * page_size
+        ).limit(page_size).all()
+        
+        # Calculate pagination
+        total_pages = (total_photos + page_size - 1) // page_size
+        
+        # Close session before rendering
+        session.close()
+        session = None
+        
+        return render_template(
+            'category_detail.html',
+            category=category,
+            photos=photos,
+            page=page,
+            total_pages=total_pages,
+            total_photos=total_photos
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in category_detail route: {e}")
+        return render_template('error.html', error=str(e)), 500
+    finally:
+        if session:
+            try:
+                session.close()
+            except:
+                pass
+
+
+@app.route('/tags')
+def tags_list():
+    """Tags list page showing all tags grouped by category."""
+    session = None
+    try:
+        session = get_session()
+        
+        # Get all tags with their category and photo counts
+        tags_data = session.query(
+            PhotoTag.tag,
+            Category.name.label('category_name'),
+            Category.id.label('category_id'),
+            func.count(distinct(PhotoTag.photo_id)).label('photo_count')
+        ).outerjoin(
+            Category, PhotoTag.category_id == Category.id
+        ).join(
+            Photo, PhotoTag.photo_id == Photo.id
+        ).filter(
+            Photo.state == PhotoState.COMPLETED
+        ).group_by(
+            PhotoTag.tag, Category.name, Category.id
+        ).order_by(
+            Category.name.nullslast(), PhotoTag.tag
+        ).all()
+        
+        # Group tags by category
+        tags_by_category = {}
+        for tag, category_name, category_id, photo_count in tags_data:
+            category_key = category_name if category_name else 'Uncategorized'
+            if category_key not in tags_by_category:
+                tags_by_category[category_key] = []
+            tags_by_category[category_key].append({
+                'tag': tag,
+                'photo_count': photo_count
+            })
+        
+        # Close session before rendering
+        session.close()
+        session = None
+        
+        return render_template('tags.html', tags_by_category=tags_by_category)
+        
+    except Exception as e:
+        logger.error(f"Error in tags route: {e}")
+        return render_template('error.html', error=str(e)), 500
+    finally:
+        if session:
+            try:
+                session.close()
+            except:
+                pass
+
+
+@app.route('/tags/<tag_name>')
+def tag_detail(tag_name):
+    """Tag detail page showing photos for a specific tag."""
+    session = None
+    try:
+        page = request.args.get('page', 1, type=int)
+        page_size = settings.GALLERY_PAGE_SIZE
+        
+        session = get_session()
+        
+        # Get total count
+        total_photos = session.query(func.count(distinct(Photo.id))).join(
+            PhotoTag, Photo.id == PhotoTag.photo_id
+        ).filter(
+            PhotoTag.tag == tag_name,
+            Photo.state == PhotoState.COMPLETED
+        ).scalar()
+        
+        if total_photos == 0:
+            return render_template('error.html', error='Tag not found'), 404
+        
+        # Get paginated photos
+        photos = session.query(Photo).join(
+            PhotoTag, Photo.id == PhotoTag.photo_id
+        ).filter(
+            PhotoTag.tag == tag_name,
+            Photo.state == PhotoState.COMPLETED
+        ).distinct().order_by(Photo.created_at.desc()).offset(
+            (page - 1) * page_size
+        ).limit(page_size).all()
+        
+        # Calculate pagination
+        total_pages = (total_photos + page_size - 1) // page_size
+        
+        # Close session before rendering
+        session.close()
+        session = None
+        
+        return render_template(
+            'tag_detail.html',
+            tag_name=tag_name,
+            photos=photos,
+            page=page,
+            total_pages=total_pages,
+            total_photos=total_photos
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in tag_detail route: {e}")
+        return render_template('error.html', error=str(e)), 500
+    finally:
+        if session:
+            try:
+                session.close()
+            except:
+                pass
 
 
 @app.errorhandler(404)

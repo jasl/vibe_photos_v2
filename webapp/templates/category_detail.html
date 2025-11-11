@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}{{ category.name|capitalize }} - Categories{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem;">
+    <a href="/categories" class="btn" style="display: inline-block; margin-bottom: 1rem;">← Back to Categories</a>
+    
+    <div class="stats">
+        <h2>
+            {% if category.name == 'electronics' %}📱
+            {% elif category.name == 'food' %}🍕
+            {% elif category.name == 'animals' %}🐾
+            {% elif category.name == 'vehicles' %}🚗
+            {% elif category.name == 'people' %}👥
+            {% elif category.name == 'nature' %}🌳
+            {% elif category.name == 'buildings' %}🏢
+            {% elif category.name == 'furniture' %}🪑
+            {% elif category.name == 'sports' %}⚽
+            {% elif category.name == 'documents' %}📄
+            {% else %}📁
+            {% endif %}
+            {{ category.name|capitalize }}
+        </h2>
+        {% if category.description %}
+        <p style="color: #666;">{{ category.description }}</p>
+        {% endif %}
+        <p>Total Photos: {{ total_photos }} | Page {{ page }} of {{ total_pages }}</p>
+    </div>
+</div>
+
+<div class="grid">
+    {% for photo in photos %}
+    <div class="card">
+        <a href="/photo/{{ photo.id }}">
+            <img src="/thumbnail/{{ photo.id }}" alt="{{ photo.filename }}" loading="lazy">
+        </a>
+        <div class="card-content">
+            <h3 style="font-size: 0.875rem; margin-bottom: 0.5rem;">{{ photo.filename }}</h3>
+            <p style="font-size: 0.75rem; color: #666;">
+                {{ photo.created_at.strftime('%Y-%m-%d %H:%M') }}
+            </p>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if not photos %}
+<div style="text-align: center; padding: 4rem; color: #999;">
+    <p>No photos found in this category.</p>
+</div>
+{% endif %}
+
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+        <a href="/categories/{{ category.name }}?page={{ page - 1 }}">← Previous</a>
+    {% endif %}
+    
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+            <a href="/categories/{{ category.name }}?page={{ p }}" class="active">{{ p }}</a>
+        {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+            <a href="/categories/{{ category.name }}?page={{ p }}">{{ p }}</a>
+        {% elif p == page - 3 or p == page + 3 %}
+            <span>...</span>
+        {% endif %}
+    {% endfor %}
+    
+    {% if page < total_pages %}
+        <a href="/categories/{{ category.name }}?page={{ page + 1 }}">Next →</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+

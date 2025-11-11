@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Categories - AI Photos Management{% endblock %}
+
+{% block content %}
+<div class="stats">
+    <h2>Photo Categories</h2>
+    <p>Browse photos by category | {{ categories|length }} categories</p>
+</div>
+
+<div class="grid">
+    {% for category, photo_count in categories %}
+    <div class="card category-card">
+        <a href="/categories/{{ category.name }}">
+            <div class="category-content">
+                <div class="category-icon">
+                    {% if category.name == 'electronics' %}📱
+                    {% elif category.name == 'food' %}🍕
+                    {% elif category.name == 'animals' %}🐾
+                    {% elif category.name == 'vehicles' %}🚗
+                    {% elif category.name == 'people' %}👥
+                    {% elif category.name == 'nature' %}🌳
+                    {% elif category.name == 'buildings' %}🏢
+                    {% elif category.name == 'furniture' %}🪑
+                    {% elif category.name == 'sports' %}⚽
+                    {% elif category.name == 'documents' %}📄
+                    {% else %}📁
+                    {% endif %}
+                </div>
+                <h3>{{ category.name|capitalize }}</h3>
+                {% if category.description %}
+                <p class="category-description">{{ category.description }}</p>
+                {% endif %}
+                <p class="photo-count">{{ photo_count }} photo{{ 's' if photo_count != 1 else '' }}</p>
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+</div>
+
+{% if not categories %}
+<div style="text-align: center; padding: 4rem; color: #999;">
+    <p>No categories with photos found.</p>
+</div>
+{% endif %}
+
+<style>
+.category-card {
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.category-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+}
+
+.category-card a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.category-content {
+    padding: 2rem;
+    text-align: center;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.category-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.category-content h3 {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: #2563eb;
+}
+
+.category-description {
+    font-size: 0.875rem;
+    color: #666;
+    margin-bottom: 1rem;
+}
+
+.photo-count {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+    margin-top: auto;
+}
+</style>
+{% endblock %}
+
+

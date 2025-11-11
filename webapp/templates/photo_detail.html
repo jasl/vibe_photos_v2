@@ -2,6 +2,55 @@
 
 {% block title %}{{ photo.filename }} - AI Photos Management{% endblock %}
 
+{% block extra_css %}
+<style>
+.category-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    text-decoration: none;
+    margin: 0.25rem 0.5rem 0.25rem 0;
+    transition: all 0.2s;
+    font-weight: 600;
+}
+
+.category-badge:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.objects-category-group {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: #f9fafb;
+    border-radius: 6px;
+    border-left: 3px solid #2563eb;
+}
+
+.objects-category-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #2563eb;
+    margin-bottom: 0.5rem;
+    text-transform: capitalize;
+}
+
+.tag-link {
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.tag-link:hover {
+    background: #2563eb;
+    color: white;
+    transform: translateY(-1px);
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div style="background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
     <h1 style="margin-bottom: 1rem;">{{ photo.filename }}</h1>
@@ -31,15 +80,43 @@
             </p>
             {% endif %}
             
-            <h3 style="margin-top: 2rem; margin-bottom: 0.5rem;">Detected Objects</h3>
-            {% if detected_objects %}
+            {% if categories %}
+            <h3 style="margin-top: 2rem; margin-bottom: 0.5rem;">Categories</h3>
             <div style="margin-top: 0.5rem;">
-                {% for obj in detected_objects %}
-                <span class="tag">
-                    {{ obj.tag }} ({{ "%.0f"|format(obj.confidence * 100) }}%)
-                </span>
+                {% for category in categories %}
+                <a href="/categories/{{ category.name }}" class="category-badge">
+                    {% if category.name == 'electronics' %}📱
+                    {% elif category.name == 'food' %}🍕
+                    {% elif category.name == 'animals' %}🐾
+                    {% elif category.name == 'vehicles' %}🚗
+                    {% elif category.name == 'people' %}👥
+                    {% elif category.name == 'nature' %}🌳
+                    {% elif category.name == 'buildings' %}🏢
+                    {% elif category.name == 'furniture' %}🪑
+                    {% elif category.name == 'sports' %}⚽
+                    {% elif category.name == 'documents' %}📄
+                    {% else %}📁
+                    {% endif %}
+                    {{ category.name|capitalize }}
+                </a>
                 {% endfor %}
             </div>
+            {% endif %}
+            
+            <h3 style="margin-top: 2rem; margin-bottom: 0.5rem;">Detected Objects</h3>
+            {% if objects_by_category %}
+                {% for category_name, objects in objects_by_category.items()|sort %}
+                <div class="objects-category-group">
+                    <h4 class="objects-category-name">{{ category_name|capitalize }}</h4>
+                    <div style="margin-top: 0.5rem;">
+                        {% for obj in objects|sort(attribute='tag') %}
+                        <a href="/tags/{{ obj.tag }}" class="tag tag-link">
+                            {{ obj.tag }} ({{ "%.0f"|format(obj.confidence * 100) }}%)
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
             {% else %}
             <p style="color: #999;">No objects detected</p>
             {% endif %}

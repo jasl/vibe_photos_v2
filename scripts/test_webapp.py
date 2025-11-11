@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import tempfile
 from PIL import Image
-from models import get_session, Photo, PhotoState, DetectedObject, Category
+from models import get_session, Photo, PhotoState, DetectedObject, PhotoTag, Category
 from config import settings
 
 
@@ -24,6 +24,7 @@ def setup_test_photo():
     
     try:
         # Clean up existing test photo (delete related objects first due to foreign keys)
+        session.query(PhotoTag).filter_by(photo_id=888888).delete()
         session.query(DetectedObject).filter_by(photo_id=888888).delete()
         session.query(Photo).filter_by(id=888888).delete()
         session.commit()
@@ -57,7 +58,13 @@ def setup_test_photo():
         )
         session.add(photo)
         
-        # Add some test objects
+        # Add some test PhotoTags (unique tags)
+        tag1 = PhotoTag(photo_id=888888, tag="test_object_1", confidence=0.95)
+        tag2 = PhotoTag(photo_id=888888, tag="test_object_2", confidence=0.87)
+        session.add(tag1)
+        session.add(tag2)
+        
+        # Add some test DetectedObjects (instances)
         obj1 = DetectedObject(photo_id=888888, tag="test_object_1", confidence=0.95)
         obj2 = DetectedObject(photo_id=888888, tag="test_object_2", confidence=0.87)
         session.add(obj1)
@@ -186,6 +193,7 @@ def cleanup_test_photo():
     
     try:
         # Delete database records
+        session.query(PhotoTag).filter_by(photo_id=888888).delete()
         session.query(DetectedObject).filter_by(photo_id=888888).delete()
         session.query(Photo).filter_by(id=888888).delete()
         session.commit()

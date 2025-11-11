@@ -34,8 +34,8 @@ class PhotoResponse(PhotoBase):
     height: Optional[int] = None
 
 
-class DetectedObjectResponse(BaseModel):
-    """Schema for detected object response."""
+class PhotoTagResponse(BaseModel):
+    """Schema for unique photo tag response."""
     model_config = ConfigDict(from_attributes=True)
     
     id: int
@@ -46,7 +46,7 @@ class DetectedObjectResponse(BaseModel):
 
 class PhotoDetailResponse(PhotoResponse):
     """Schema for detailed photo response with all related data."""
-    detected_objects: List[DetectedObjectResponse] = []
+    tags: List[PhotoTagResponse] = []
     ocr_text: Optional[str] = None
     faces_count: int = 0
     has_duplicates: bool = False

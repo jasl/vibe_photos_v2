@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Tags - AI Photos Management{% endblock %}
+
+{% block content %}
+<div class="stats">
+    <h2>Photo Tags</h2>
+    <p>Browse photos by tag | Organized by category</p>
+</div>
+
+{% for category_name, tags in tags_by_category.items()|sort %}
+<div class="tag-category-section">
+    <h3 class="category-header">
+        {% if category_name == 'electronics' %}📱
+        {% elif category_name == 'food' %}🍕
+        {% elif category_name == 'animals' %}🐾
+        {% elif category_name == 'vehicles' %}🚗
+        {% elif category_name == 'people' %}👥
+        {% elif category_name == 'nature' %}🌳
+        {% elif category_name == 'buildings' %}🏢
+        {% elif category_name == 'furniture' %}🪑
+        {% elif category_name == 'sports' %}⚽
+        {% elif category_name == 'documents' %}📄
+        {% else %}📁
+        {% endif %}
+        {{ category_name|capitalize }}
+    </h3>
+    
+    <div class="tag-cloud">
+        {% for tag_info in tags|sort(attribute='tag') %}
+        <a href="/tags/{{ tag_info.tag }}" class="tag-badge" title="{{ tag_info.photo_count }} photo{{ 's' if tag_info.photo_count != 1 else '' }}">
+            {{ tag_info.tag }}
+            <span class="tag-count">{{ tag_info.photo_count }}</span>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+
+{% if not tags_by_category %}
+<div style="text-align: center; padding: 4rem; color: #999;">
+    <p>No tags found.</p>
+</div>
+{% endif %}
+
+<style>
+.tag-category-section {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+}
+
+.category-header {
+    font-size: 1.25rem;
+    color: #2563eb;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.tag-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.tag-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    background: #f3f4f6;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    text-decoration: none;
+    color: #374151;
+    transition: all 0.2s;
+    border: 1px solid #e5e7eb;
+}
+
+.tag-badge:hover {
+    background: #2563eb;
+    color: white;
+    border-color: #2563eb;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
+}
+
+.tag-count {
+    background: rgba(0, 0, 0, 0.1);
+    padding: 0.125rem 0.375rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.tag-badge:hover .tag-count {
+    background: rgba(255, 255, 255, 0.2);
+}
+</style>
+{% endblock %}
+
+

@@ -6,7 +6,8 @@ from datetime import datetime
 from typing import List, Optional
 from sqlalchemy import (
     create_engine, Column, Integer, String, Float, DateTime,
-    ForeignKey, Text, JSON, Index, BigInteger, Enum as SQLEnum
+    ForeignKey, Text, JSON, Index, BigInteger, Enum as SQLEnum,
+    UniqueConstraint
 )
 from sqlalchemy.orm import declarative_base, relationship, Session
 from sqlalchemy.dialects.postgresql import TSVECTOR
@@ -51,6 +52,7 @@ class Photo(Base):
 
     # Relationships
     detected_objects = relationship("DetectedObject", back_populates="photo", cascade="all, delete-orphan")
+    photo_tags = relationship("PhotoTag", back_populates="photo", cascade="all, delete-orphan")
     semantic_embedding = relationship("SemanticEmbedding", back_populates="photo", uselist=False, cascade="all, delete-orphan")
     ocr_text = relationship("OCRText", back_populates="photo", uselist=False, cascade="all, delete-orphan")
     faces = relationship("Face", back_populates="photo", cascade="all, delete-orphan")
@@ -72,6 +74,7 @@ class Category(Base):
     # Relationships
     tag_mappings = relationship("TagCategoryMapping", back_populates="category", cascade="all, delete-orphan")
     detected_objects = relationship("DetectedObject", back_populates="category")
+    photo_tags = relationship("PhotoTag")
 
     def __repr__(self):
         return f"<Category(id={self.id}, name={self.name})>"
@@ -101,6 +104,7 @@ class DetectedObject(Base):
     tag = Column(String(100), nullable=False, index=True)
     confidence = Column(Float, nullable=False)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
+    bbox = Column(JSON, nullable=True)  # {x1, y1, x2, y2} from DETR
 
     # Relationships
     photo = relationship("Photo", back_populates="detected_objects")
@@ -112,6 +116,29 @@ class DetectedObject(Base):
 
     def __repr__(self):
         return f"<DetectedObject(photo_id={self.photo_id}, tag={self.tag}, confidence={self.confidence:.2f})>"
+
+
+class PhotoTag(Base):
+    """Unique tags per photo for efficient search and display."""
+    __tablename__ = "photo_tags"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    photo_id = Column(Integer, ForeignKey("photos.id"), nullable=False, index=True)
+    tag = Column(String(100), nullable=False, index=True)
+    confidence = Column(Float, nullable=False)  # Highest confidence for this tag
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
+    
+    # Relationships
+    photo = relationship("Photo", back_populates="photo_tags")
+    category = relationship("Category")
+    
+    __table_args__ = (
+        UniqueConstraint("photo_id", "tag", name="uq_photo_tag"),
+        Index("idx_photo_tags_tag", "tag"),
+    )
+    
+    def __repr__(self):
+        return f"<PhotoTag(photo_id={self.photo_id}, tag={self.tag}, confidence={self.confidence:.2f})>"
 
 
 class SemanticEmbedding(Base):
