@@ -14,13 +14,15 @@ A powerful AI-driven photo management system that helps content creators quickly
 ## System Architecture
 
 - **Web Interface**: Flask (simple, read-only gallery and search)
-- **Object Recognition**: RAM++ (recognize-anything-plus-model)
-- **Semantic Embeddings**: OpenCLIP (ViT-H-14)
-- **OCR**: PaddleOCR (multilingual)
-- **Face Detection**: InsightFace (buffalo_l)
-- **Duplicate Detection**: PDQ hashing (pdqhash library)
+- **Object Detection**: DETR (facebook/detr-resnet-50) - GPU, transformer-based, high accuracy
+- **Semantic Embeddings**: OpenCLIP (ViT-H-14) - GPU, fast semantic search
+- **OCR**: PaddleOCR (multilingual) - CPU (ONNX Runtime / CUDA 13 compatibility)
+- **Face Detection**: InsightFace (buffalo_l) - CPU (ONNX Runtime / CUDA 13 compatibility)
+- **Duplicate Detection**: PDQ hashing (pdqhash library) - CPU
 - **Database**: PostgreSQL 18 + pgvector
 - **Queue**: Redis 8 + Celery
+
+**Note**: PaddleOCR and InsightFace use CPU temporarily due to ONNX Runtime not supporting CUDA 13 yet. Will switch to GPU when support is available. See [Known Issues](#known-issues).
 
 ## Prerequisites
 
@@ -111,7 +113,7 @@ python scripts/download_models.py
 ```
 
 **Models downloaded:**
-- RAM++ (~2GB) - Object recognition
+- DETR ResNet-50 (~160MB) - Object detection
 - OpenCLIP ViT-H-14 (~3GB) - Semantic embeddings
 - PaddleOCR (~100MB) - Text extraction
 - InsightFace buffalo_l (~600MB) - Face detection
@@ -158,7 +160,7 @@ celery -A workers.celery_app worker --loglevel=info --concurrency=1
 **Keep this terminal open** - you should see:
 ```
 [2025-01-10 10:00:00] Initializing AI models...
-[2025-01-10 10:00:30] ✓ RAM++ model loaded
+[2025-01-10 10:00:30] ✓ DETR model loaded
 [2025-01-10 10:01:00] ✓ OpenCLIP model loaded
 ...
 [2025-01-10 10:02:00] ✓ All AI models loaded successfully
@@ -205,10 +207,11 @@ open http://localhost:5000/api/stats
 Open **another new terminal** and run:
 
 ```bash
-# Activate venv
-source .venv/bin/activate
+# Start Flask app (uv run ensures proper environment)
+uv run python webapp/app.py
 
-# Start Flask app
+# Or if you prefer to activate venv manually:
+source .venv/bin/activate
 python webapp/app.py
 ```
 
@@ -298,6 +301,30 @@ session.commit()
 session.close()
 ```
 
+## Known Issues
+
+### ONNX Runtime Models Use CPU (Temporary)
+
+**Status**: ⚠️ ONNX Runtime doesn't support CUDA 13 yet
+
+**Affected Models**:
+- **PaddleOCR** (text extraction) - Currently runs on CPU
+- **InsightFace** (face detection) - Currently runs on CPU
+
+**Unaffected Models** (Running on GPU):
+- **DETR** (object detection) - PyTorch, uses GPU ✅
+- **OpenCLIP** (semantic embeddings) - PyTorch, uses GPU ✅
+
+**Performance Impact**: Minimal (~100-200ms slower per photo)
+- Total processing still under 1 second per photo
+- Throughput: 40-60 photos/minute with 4 workers
+
+**Future**: Will switch back to GPU when ONNX Runtime releases CUDA 13 support.
+
+**Details**: See [ONNX_CUDA13_INFO.md](ONNX_CUDA13_INFO.md)
+
+---
+
 ## Troubleshooting
 
 ### Issue: "CUDA out of memory"
@@ -309,15 +336,23 @@ session.close()
    use_gpu = False  # Force CPU for PaddleOCR
    ```
 
-### Issue: "Failed to load RAM++ model"
+### Issue: "Failed to load DETR model"
 
 **Solution:**
 1. Check internet connection
 2. Clear cache and re-download:
    ```bash
-   rm -rf ~/.cache/ai_photos_models/xinyu1205
-   python scripts/download_models.py
+   rm -rf ~/.cache/ai_photos_models/models--facebook--detr-resnet-50
+   uv run python scripts/download_models.py
    ```
+
+### Issue: "PDQ hash value too long for VARCHAR(64)"
+
+**Solution:**
+This was a bug in PDQ hash conversion (fixed in workers/ai_models.py). To clean up existing bad data:
+```bash
+uv run python scripts/fix_pdq_hashes.py
+```
 
 ### Issue: "PostgreSQL connection refused"
 
@@ -439,6 +474,27 @@ The system implements Redis caching for:
 - Category listings
 - Frequently queried tags
 
+## About DETR
+
+**DETR (DEtection TRansformer)** is a state-of-the-art object detection model from Facebook AI Research.
+
+### Why DETR?
+- **High Accuracy**: Transformer-based architecture for precise object detection
+- **91 Object Classes**: Detects common objects (person, car, phone, laptop, pizza, etc.)
+- **Bounding Boxes**: Provides exact object locations
+- **Complex Scenes**: Excellent at handling multiple objects and small items
+- **No Hallucinations**: Only detects actual objects (unlike caption-based models)
+
+### Detection Examples
+- **Electronics**: laptop, cell phone, mouse, keyboard, tv, remote
+- **Food**: pizza, sandwich, apple, banana, cake, donut
+- **Furniture**: chair, couch, bed, dining table
+- **Plus 70+ more categories**
+
+See [DETR Implementation](DETR_IMPLEMENTATION.md) for technical details.
+
+---
+
 ## License
 
 This project is licensed under **AGPL-3.0** (GNU Affero General Public License v3.0).
@@ -446,7 +502,7 @@ This project is licensed under **AGPL-3.0** (GNU Affero General Public License v
 ### AI Models Licenses
 
 The integrated AI models have their own licenses:
-- **RAM++**: Apache 2.0
+- **DETR**: Apache 2.0
 - **OpenCLIP**: MIT
 - **PaddleOCR**: Apache 2.0
 - **InsightFace**: MIT/Apache 2.0

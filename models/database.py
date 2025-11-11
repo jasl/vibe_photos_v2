@@ -210,8 +210,10 @@ def get_engine():
         settings.DATABASE_URL,
         echo=settings.FLASK_DEBUG,
         pool_pre_ping=True,
-        pool_size=10,
-        max_overflow=20
+        pool_size=20,  # Increased for web app concurrent requests
+        max_overflow=40,  # Allow bursts of connections
+        pool_recycle=3600,  # Recycle connections after 1 hour
+        pool_timeout=30  # Timeout for getting connection from pool
     )
 
 

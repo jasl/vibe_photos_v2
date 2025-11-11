@@ -97,7 +97,7 @@ def process_single_image(self, photo_id: int):
         # Get the processed image path (or original if conversion failed)
         image_path = str(image_data.get('processed_path', photo.file_path))
         
-        # Step 2: Object Recognition (RAM++)
+        # Step 2: Object Recognition (DETR)
         try:
             update_photo_state(session, photo_id, PhotoState.PROCESSING_OBJECTS)
             

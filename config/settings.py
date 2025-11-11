@@ -35,7 +35,8 @@ class Settings:
 
     # Photo Directory Configuration
     PHOTOS_DIR: Path = Path(os.getenv("PHOTOS_DIR", "/home/jasl/datasets/my_photos"))
-    THUMBNAIL_DIR: Path = Path(os.getenv("THUMBNAIL_DIR", "./data/thumbnails"))
+    # Use absolute path for thumbnails to avoid path resolution issues
+    THUMBNAIL_DIR: Path = Path(os.getenv("THUMBNAIL_DIR", str(Path(__file__).parent.parent / "data" / "thumbnails"))).resolve()
     THUMBNAIL_SIZE: int = int(os.getenv("THUMBNAIL_SIZE", "400"))
 
     # AI Model Configuration
@@ -65,7 +66,7 @@ class Settings:
     LOG_FORMAT: str = os.getenv("LOG_FORMAT", "json")  # 'json' or 'text'
 
     # Model-specific settings
-    RAM_MODEL_NAME: str = "xinyu1205/recognize-anything-plus-model"
+    DETR_MODEL_NAME: str = os.getenv("DETR_MODEL_NAME", "facebook/detr-resnet-50")
     OPENCLIP_MODEL_NAME: str = "ViT-H-14"
     OPENCLIP_PRETRAINED: str = "laion2b_s32b_b79k"
     INSIGHTFACE_MODEL_NAME: str = "buffalo_l"

@@ -1,6 +1,6 @@
 """
 Script to pre-download all AI models.
-Downloads RAM++, OpenCLIP, PaddleOCR, and InsightFace models to cache directory.
+Downloads DETR, OpenCLIP, PaddleOCR, and InsightFace models to cache directory.
 """
 
 import os
@@ -12,48 +12,50 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import settings
 import torch
-from transformers import AutoModel, AutoProcessor
+from transformers import DetrImageProcessor, DetrForObjectDetection
 import open_clip
 from paddleocr import PaddleOCR
 import insightface
 
 
-def download_ram_plus():
-    """Download RAM++ model from HuggingFace."""
+def download_detr():
+    """Download DETR model from HuggingFace."""
     print("\n" + "=" * 60)
-    print("Downloading RAM++ Model")
+    print("Downloading DETR Model")
     print("=" * 60)
-    print(f"Model: {settings.RAM_MODEL_NAME}")
+    print(f"Model: {settings.DETR_MODEL_NAME}")
     print(f"Cache directory: {settings.MODEL_CACHE_DIR}")
     
     # Check if already cached
-    ram_cache = settings.MODEL_CACHE_DIR / "models--xinyu1205--recognize-anything-plus-model"
-    if ram_cache.exists():
-        print("⏭️  RAM++ already cached, skipping download")
+    detr_cache = settings.MODEL_CACHE_DIR / "models--facebook--detr-resnet-50"
+    if detr_cache.exists():
+        print("⏭️  DETR already cached, skipping download")
         return True
     
     try:
-        from huggingface_hub import snapshot_download
-        
-        print("📥 Downloading RAM++ model files...")
-        
-        # Download entire model repository (includes custom code)
-        model_path = snapshot_download(
-            repo_id=settings.RAM_MODEL_NAME,
-            cache_dir=settings.MODEL_CACHE_DIR,
-            allow_patterns=["*.py", "*.json", "*.bin", "*.safetensors", "*.txt"]
+        print("📥 Downloading DETR processor...")
+        processor = DetrImageProcessor.from_pretrained(
+            settings.DETR_MODEL_NAME,
+            cache_dir=settings.MODEL_CACHE_DIR
         )
         
-        print(f"✓ RAM++ model downloaded successfully")
-        print(f"  Model path: {model_path}")
-        print(f"  Note: RAM++ uses custom model code (trust_remote_code=True)")
+        print("📥 Downloading DETR model...")
+        model = DetrForObjectDetection.from_pretrained(
+            settings.DETR_MODEL_NAME,
+            cache_dir=settings.MODEL_CACHE_DIR
+        )
+        
+        print(f"✓ DETR model downloaded successfully")
+        print(f"  Model: {settings.DETR_MODEL_NAME}")
+        print(f"  Size: ~159MB")
+        print(f"  Detects 91 COCO object classes")
         
         return True
         
     except Exception as e:
-        print(f"✗ Failed to download RAM++ model: {e}")
-        print("\n💡 Alternative: Using BLIP for image captioning/tagging")
-        print("  You can switch to: Salesforce/blip-image-captioning-large")
+        print(f"✗ Failed to download DETR model: {e}")
+        print("  You can try manually downloading from:")
+        print(f"  https://huggingface.co/{settings.DETR_MODEL_NAME}")
         return False
 
 
@@ -222,16 +224,16 @@ def check_cached_models():
     cache_dir = settings.MODEL_CACHE_DIR
     
     models_status = {
-        "RAM++": False,
+        "DETR": False,
         "OpenCLIP": False,
         "PaddleOCR": False,
         "InsightFace": False
     }
     
-    # Check RAM++
-    ram_cache = cache_dir / "models--xinyu1205--recognize-anything-plus-model"
-    if ram_cache.exists():
-        models_status["RAM++"] = True
+    # Check DETR
+    detr_cache = cache_dir / "models--facebook--detr-resnet-50"
+    if detr_cache.exists():
+        models_status["DETR"] = True
     
     # Check OpenCLIP (looks for laion weights)
     openclip_cache = cache_dir / "open_clip"
@@ -271,11 +273,11 @@ def main():
     print("AI Photos Management - Model Download Script")
     print("=" * 60)
     print("\nThis script will download the following models:")
-    print("  1. RAM++ (~2 GB) - Object recognition")
+    print("  1. DETR ResNet-50 (~160 MB) - Object detection")
     print("  2. OpenCLIP ViT-H-14 (~3 GB) - Semantic embeddings")
     print("  3. PaddleOCR (~100 MB) - Text extraction")
     print("  4. InsightFace buffalo_l (~600 MB) - Face detection")
-    print(f"\nTotal estimated download: ~6 GB")
+    print(f"\nTotal estimated download: ~4 GB")
     print(f"Cache directory: {settings.MODEL_CACHE_DIR}")
     
     # Check prerequisites
@@ -300,7 +302,7 @@ def main():
     
     # Download models
     results = {
-        "RAM++": download_ram_plus(),
+        "DETR": download_detr(),
         "OpenCLIP": download_openclip(),
         "PaddleOCR": download_paddleocr(),
         "InsightFace": download_insightface()

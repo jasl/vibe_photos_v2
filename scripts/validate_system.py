@@ -18,10 +18,10 @@ from services import hybrid_search, keyword_search, semantic_search
 from models import get_session, Category, TagCategoryMapping
 
 
-def test_ram_object_recognition():
-    """Test RAM++ object recognition accuracy."""
+def test_detr_object_recognition():
+    """Test DETR object recognition."""
     print("\n" + "=" * 60)
-    print("Test 1: RAM++ Object Recognition")
+    print("Test 1: DETR Object Recognition")
     print("=" * 60)
     
     try:
@@ -30,7 +30,7 @@ def test_ram_object_recognition():
         
         results = ai_models.recognize_objects(test_img)
         
-        print(f"✓ RAM++ model responding")
+        print(f"✓ DETR model responding")
         print(f"  Detected {len(results)} objects")
         
         if results:
@@ -41,7 +41,7 @@ def test_ram_object_recognition():
         return True
         
     except Exception as e:
-        print(f"✗ RAM++ test failed: {e}")
+        print(f"✗ DETR test failed: {e}")
         return False
 
 
@@ -246,7 +246,7 @@ def main():
     print("Note: Some tests require processed photos in the database.")
     
     tests = [
-        ("RAM++ Object Recognition", test_ram_object_recognition),
+        ("DETR Object Recognition", test_detr_object_recognition),
         ("Category Mapping", test_category_mapping),
         ("OpenCLIP Embeddings", test_openclip_embeddings),
         ("PaddleOCR", test_paddleocr),

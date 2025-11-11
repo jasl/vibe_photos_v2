@@ -1,6 +1,11 @@
 """
 AI Models loader and inference functions.
-Functional approach to managing AI models: RAM++, OpenCLIP, PaddleOCR, InsightFace, PDQ Hash.
+Functional approach to managing AI models: DETR, OpenCLIP, PaddleOCR, InsightFace, PDQ Hash.
+
+NOTE: PaddleOCR and InsightFace use ONNX Runtime which doesn't support CUDA 13 yet.
+Both are configured to use CPU mode for compatibility. Performance is still good:
+- PaddleOCR: ~100-200ms per image (CPU)
+- InsightFace: ~50-100ms per image (CPU)
 """
 
 import torch
@@ -29,10 +34,8 @@ logger = logging.getLogger(__name__)
 _models_cache = {
     'initialized': False,
     'device': None,
-    'ram_model': None,
-    'ram_processor': None,
-    'ram_pipeline': None,
-    'ram_method': None,
+    'detr_model': None,
+    'detr_processor': None,
     'clip_model': None,
     'clip_preprocess': None,
     'clip_tokenizer': None,
@@ -41,53 +44,33 @@ _models_cache = {
 }
 
 
-def _load_ram_model() -> None:
-    """Load RAM++ model for object recognition."""
-    logger.info("Loading RAM++ model...")
+def _load_detr_model() -> None:
+    """Load DETR model for object detection."""
+    logger.info("Loading DETR model...")
     
     try:
-        from transformers import pipeline
+        from transformers import DetrImageProcessor, DetrForObjectDetection
         device = _models_cache['device']
         
-        # Try using pipeline API first
-        try:
-            _models_cache['ram_pipeline'] = pipeline(
-                "image-to-text",
-                model=settings.RAM_MODEL_NAME,
-                device=0 if device == 'cuda' else -1,
-                model_kwargs={"trust_remote_code": True}
-            )
-            logger.info("✓ RAM++ model loaded via pipeline")
-            _models_cache['ram_method'] = 'pipeline'
-            
-        except Exception as pipeline_error:
-            # Fallback: Try loading with AutoModel (with trust_remote_code)
-            logger.warning(f"Pipeline loading failed, trying AutoModel: {pipeline_error}")
-            
-            from transformers import AutoModel, AutoProcessor
-            
-            _models_cache['ram_model'] = AutoModel.from_pretrained(
-                settings.RAM_MODEL_NAME,
-                cache_dir=settings.MODEL_CACHE_DIR,
-                trust_remote_code=True
-            ).eval()
-            
-            _models_cache['ram_processor'] = AutoProcessor.from_pretrained(
-                settings.RAM_MODEL_NAME,
-                cache_dir=settings.MODEL_CACHE_DIR,
-                trust_remote_code=True
-            )
-            
-            # Move to device and enable mixed precision
-            if device == 'cuda':
-                _models_cache['ram_model'] = _models_cache['ram_model'].cuda().half()
-            
-            logger.info("✓ RAM++ model loaded via AutoModel")
-            _models_cache['ram_method'] = 'automodel'
+        # Load processor and model
+        _models_cache['detr_processor'] = DetrImageProcessor.from_pretrained(
+            settings.DETR_MODEL_NAME,
+            cache_dir=settings.MODEL_CACHE_DIR
+        )
+        
+        _models_cache['detr_model'] = DetrForObjectDetection.from_pretrained(
+            settings.DETR_MODEL_NAME,
+            cache_dir=settings.MODEL_CACHE_DIR
+        ).eval()
+        
+        # Move to device and enable mixed precision
+        if device == 'cuda':
+            _models_cache['detr_model'] = _models_cache['detr_model'].cuda()
+        
+        logger.info(f"✓ DETR model loaded: {settings.DETR_MODEL_NAME}")
         
     except Exception as e:
-        logger.error(f"✗ Failed to load RAM++ model: {e}")
-        logger.error("Consider using alternative: Salesforce/blip-image-captioning-large")
+        logger.error(f"✗ Failed to load DETR model: {e}")
         raise
 
 
@@ -127,10 +110,11 @@ def _load_paddleocr_model() -> None:
     logger.info("Loading PaddleOCR model...")
     
     try:
-        # Newer PaddleOCR API is simpler - auto-detects GPU
+        # Note: ONNX Runtime doesn't support CUDA 13 yet, so PaddleOCR will
+        # automatically fall back to CPU if CUDA is unavailable for ONNX
         _models_cache['ocr_model'] = PaddleOCR(lang='en')
         
-        logger.info(f"✓ PaddleOCR model loaded (auto-detected device)")
+        logger.info(f"✓ PaddleOCR model loaded (ONNX will use CPU if CUDA 13 incompatible)")
         
     except Exception as e:
         logger.error(f"✗ Failed to load PaddleOCR model: {e}")
@@ -144,18 +128,20 @@ def _load_insightface_model() -> None:
     try:
         device = _models_cache['device']
         
+        # Force CPU mode - ONNX Runtime doesn't support CUDA 13 yet
         face_app = insightface.app.FaceAnalysis(
             name=settings.INSIGHTFACE_MODEL_NAME,
-            root=str(settings.MODEL_CACHE_DIR / 'insightface')
+            root=str(settings.MODEL_CACHE_DIR / 'insightface'),
+            providers=['CPUExecutionProvider']  # CPU mode for ONNX compatibility
         )
         
-        # Prepare with appropriate context (GPU or CPU)
-        ctx_id = 0 if device == 'cuda' else -1
+        # Prepare with CPU context
+        ctx_id = -1  # CPU
         face_app.prepare(ctx_id=ctx_id, det_size=(640, 640))
         
         _models_cache['face_app'] = face_app
         
-        logger.info(f"✓ InsightFace model loaded (ctx_id: {ctx_id})")
+        logger.info(f"✓ InsightFace model loaded (CPU mode for ONNX compatibility)")
         
     except Exception as e:
         logger.error(f"✗ Failed to load InsightFace model: {e}")
@@ -172,7 +158,7 @@ def initialize_models() -> None:
     
     _models_cache['device'] = settings.DEVICE
     
-    _load_ram_model()
+    _load_detr_model()
     _load_openclip_model()
     _load_paddleocr_model()
     _load_insightface_model()
@@ -181,84 +167,87 @@ def initialize_models() -> None:
     logger.info("✓ All AI models loaded successfully")
 
 
-def recognize_objects(image: Image.Image) -> List[Dict[str, float]]:
+def recognize_objects_detr(image: Image.Image, confidence_threshold: float = 0.5) -> List[Dict[str, float]]:
     """
-    Recognize objects in an image using RAM++.
+    Recognize objects in an image using DETR.
     
     Args:
         image: PIL Image
+        confidence_threshold: Minimum confidence score (0-1)
         
     Returns:
-        List of dicts with 'tag' and 'confidence' keys
+        List of dicts with 'tag', 'confidence', and 'bbox' keys
     """
     if not _models_cache['initialized']:
         initialize_models()
     
     try:
-        method = _models_cache.get('ram_method', 'pipeline')
+        import torch
         
-        # Method 1: Pipeline API (simpler)
-        if method == 'pipeline':
-            pipeline = _models_cache['ram_pipeline']
-            
-            # Pipeline returns text description/tags
-            result = pipeline(image, max_new_tokens=100)
-            
-            # Parse pipeline output (format varies by model)
-            if isinstance(result, list) and len(result) > 0:
-                text = result[0].get('generated_text', '')
-                
-                # Split tags (RAM++ typically returns comma-separated tags)
-                tags = [tag.strip() for tag in text.split(',')]
-                
-                # Return with uniform confidence
-                results = [
-                    {'tag': tag, 'confidence': 0.9}
-                    for tag in tags if tag
-                ]
-                
-                logger.debug(f"Recognized {len(results)} objects via pipeline")
-                return results
+        processor = _models_cache['detr_processor']
+        model = _models_cache['detr_model']
+        device = _models_cache['device']
         
-        # Method 2: AutoModel (original approach)
-        else:
-            device = _models_cache['device']
-            ram_model = _models_cache['ram_model']
-            ram_processor = _models_cache['ram_processor']
+        # Prepare image
+        inputs = processor(images=image, return_tensors="pt")
+        
+        # Move to device
+        if device == 'cuda':
+            inputs = {k: v.cuda() for k, v in inputs.items()}
+        
+        # Run inference
+        with torch.no_grad():
+            outputs = model(**inputs)
+        
+        # Post-process results
+        target_sizes = torch.tensor([image.size[::-1]])
+        if device == 'cuda':
+            target_sizes = target_sizes.cuda()
+        
+        results = processor.post_process_object_detection(
+            outputs, 
+            target_sizes=target_sizes, 
+            threshold=confidence_threshold
+        )[0]
+        
+        # Convert to our format
+        detections = []
+        for score, label, box in zip(results["scores"], results["labels"], results["boxes"]):
+            label_name = model.config.id2label[label.item()]
+            confidence = score.item()
+            bbox = box.tolist()
             
-            # Preprocess image
-            inputs = ram_processor(images=image, return_tensors="pt")
-            
-            if device == 'cuda':
-                inputs = {k: v.cuda().half() if v.dtype == torch.float32 else v.cuda() 
-                         for k, v in inputs.items()}
-            
-            # Run inference
-            with torch.no_grad():
-                outputs = ram_model(**inputs)
-            
-            # Parse outputs
-            logits = outputs.logits[0]
-            probs = torch.sigmoid(logits)
-            tags = ram_model.config.id2label
-            
-            # Filter tags with confidence > threshold
-            threshold = 0.5
-            results = [
-                {'tag': tags.get(idx, f"tag_{idx}"), 'confidence': float(prob)}
-                for idx, prob in enumerate(probs)
-                if prob > threshold
-            ]
-            
-            # Sort by confidence descending
-            results.sort(key=lambda x: x['confidence'], reverse=True)
-            
-            logger.debug(f"Recognized {len(results)} objects via AutoModel")
-            return results
+            detections.append({
+                'tag': label_name,
+                'confidence': confidence,
+                'bbox': {
+                    'x1': bbox[0],
+                    'y1': bbox[1],
+                    'x2': bbox[2],
+                    'y2': bbox[3]
+                }
+            })
+        
+        logger.debug(f"DETR detected {len(detections)} objects")
+        return detections
         
     except Exception as e:
-        logger.error(f"Error in object recognition: {e}")
+        logger.error(f"Error in DETR object recognition: {e}")
         return []
+
+
+def recognize_objects(image: Image.Image, confidence_threshold: float = 0.5) -> List[Dict[str, float]]:
+    """
+    Recognize objects in an image using DETR.
+    
+    Args:
+        image: PIL Image
+        confidence_threshold: Minimum confidence score (0-1)
+        
+    Returns:
+        List of dicts with 'tag', 'confidence', and 'bbox' keys
+    """
+    return recognize_objects_detr(image, confidence_threshold)
 
 
 def generate_image_embedding(image: Image.Image) -> np.ndarray:
@@ -356,7 +345,7 @@ def extract_text(image_path: str) -> Optional[str]:
     
     try:
         ocr_model = _models_cache['ocr_model']
-        result = ocr_model.ocr(image_path, cls=True)
+        result = ocr_model.ocr(image_path)
         
         if not result or not result[0]:
             logger.debug("No text detected in image")
@@ -452,8 +441,15 @@ def calculate_pdq_hash(image_path: str) -> Tuple[str, Optional[float]]:
         # Calculate PDQ hash
         hash_vector, quality = pdqhash.compute(img_rgb)
         
-        # Convert hash to hex string
-        hash_hex = ''.join([f'{byte:02x}' for byte in hash_vector])
+        # Convert bit vector to hex string
+        # pdqhash returns a numpy array of 256 bits (0s and 1s)
+        # Convert to hex: group 8 bits into bytes, then convert to hex
+        hash_bytes = bytearray()
+        for i in range(0, len(hash_vector), 8):
+            byte_bits = hash_vector[i:i+8]
+            byte_val = int(''.join(str(int(b)) for b in byte_bits), 2)
+            hash_bytes.append(byte_val)
+        hash_hex = hash_bytes.hex()
         
         logger.debug(f"PDQ hash: {hash_hex[:16]}... (quality: {quality})")
         return (hash_hex, float(quality) if quality is not None else None)

@@ -3,9 +3,14 @@ Flask web application for AI Photos Management.
 Provides read-only gallery and hybrid search interface.
 """
 
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import logging
 from flask import Flask, render_template, request, jsonify, send_file
-from pathlib import Path
 
 from config import settings
 from models import Photo, get_session, PhotoState, Category
@@ -27,6 +32,7 @@ logger = logging.getLogger(__name__)
 @app.route('/')
 def index():
     """Home page showing photo gallery."""
+    session = None
     try:
         page = request.args.get('page', 1, type=int)
         page_size = settings.GALLERY_PAGE_SIZE
@@ -48,7 +54,9 @@ def index():
         # Calculate pagination
         total_pages = (total_photos + page_size - 1) // page_size
         
+        # Close session before rendering
         session.close()
+        session = None
         
         return render_template(
             'index.html',
@@ -61,11 +69,18 @@ def index():
     except Exception as e:
         logger.error(f"Error in index route: {e}")
         return render_template('error.html', error=str(e)), 500
+    finally:
+        if session:
+            try:
+                session.close()
+            except:
+                pass
 
 
 @app.route('/search')
 def search():
     """Search page with hybrid search."""
+    session = None
     try:
         query = request.args.get('q', '')
         mode = request.args.get('mode', 'hybrid')
@@ -76,10 +91,11 @@ def search():
         session = get_session()
         all_categories = session.query(Category).all()
         session.close()
+        session = None
         
         results = None
         if query:
-            # Perform search
+            # Perform search (uses its own session internally)
             search_results = hybrid_search(
                 query=query,
                 mode=mode,
@@ -102,6 +118,12 @@ def search():
     except Exception as e:
         logger.error(f"Error in search route: {e}")
         return render_template('error.html', error=str(e)), 500
+    finally:
+        if session:
+            try:
+                session.close()
+            except:
+                pass
 
 
 @app.route('/photo/<int:photo_id>')
@@ -123,16 +145,30 @@ def photo_detail(photo_id):
 @app.route('/thumbnail/<int:photo_id>')
 def serve_thumbnail(photo_id):
     """Serve thumbnail image."""
+    session = None
     try:
         session = get_session()
         photo = session.query(Photo).filter_by(id=photo_id).first()
-        session.close()
         
         if not photo or not photo.thumbnail_path:
             return "Thumbnail not found", 404
         
-        thumbnail_path = Path(photo.thumbnail_path)
+        # Get thumbnail path before closing session
+        thumbnail_path_str = photo.thumbnail_path
+        
+        # Close session immediately to free connection
+        session.close()
+        session = None
+        
+        thumbnail_path = Path(thumbnail_path_str)
+        
+        # If path is relative, resolve it relative to project root
+        if not thumbnail_path.is_absolute():
+            project_root = Path(__file__).parent.parent
+            thumbnail_path = (project_root / thumbnail_path).resolve()
+        
         if not thumbnail_path.exists():
+            logger.error(f"Thumbnail file not found: {thumbnail_path}")
             return "Thumbnail file not found", 404
         
         return send_file(thumbnail_path, mimetype='image/jpeg')
@@ -140,11 +176,19 @@ def serve_thumbnail(photo_id):
     except Exception as e:
         logger.error(f"Error serving thumbnail: {e}")
         return "Error serving thumbnail", 500
+    finally:
+        # Ensure session is closed even on error
+        if session:
+            try:
+                session.close()
+            except:
+                pass
 
 
 @app.route('/api/stats')
 def api_stats():
     """API endpoint for processing statistics."""
+    session = None
     try:
         session = get_session()
         
@@ -167,7 +211,9 @@ def api_stats():
         ]
         processing = session.query(Photo).filter(Photo.state.in_(processing_states)).count()
         
+        # Close session before preparing response
         session.close()
+        session = None
         
         completion_percentage = (completed / total * 100) if total > 0 else 0
         
@@ -184,6 +230,12 @@ def api_stats():
     except Exception as e:
         logger.error(f"Error in stats API: {e}")
         return jsonify({'error': str(e)}), 500
+    finally:
+        if session:
+            try:
+                session.close()
+            except:
+                pass
 
 
 @app.route('/api/search')
