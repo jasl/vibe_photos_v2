@@ -10,6 +10,24 @@ dependencies = [
     "transformers>=4.57.1",
     "pillow>=12.0.0",
     "accelerate>=1.11.0",
+    "flask>=3.1.2",
+    "sqlalchemy>=2.0.44",
+    "psycopg2-binary>=2.9.11",
+    "pgvector>=0.4.1",
+    "celery>=5.5.3",
+    "redis>=7.0.1",
+    "open-clip-torch>=3.2.0",
+    "paddleocr>=3.3.1",
+    "insightface>=0.7.3",
+    "opencv-python>=4.12.0.88",
+    "pdqhash>=0.2.8",
+    "scikit-learn>=1.7.2",
+    "tqdm>=4.67.1",
+    "python-dotenv>=1.2.1",
+    "pillow-heif>=1.1.1",
+    "rawpy>=0.25.1",
+    "paddlepaddle-gpu>=3.2.1",
+    "onnxruntime-gpu>=1.23.2",
 ]
 
 [tool.uv.sources]
@@ -26,6 +44,10 @@ torchvision = [
   { index = "pytorch-cuda", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 
+paddlepaddle-gpu = [
+  { index = "paddlepaddle-cuda", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
 [[tool.uv.index]]
 name = "pytorch-cuda"
 # Use PyTorch built for NVIDIA Toolkit version 13.0.
@@ -34,3 +56,11 @@ url = "https://download.pytorch.org/whl/cu130"
 # Only use this index when explicitly requested by `tool.uv.sources`.
 explicit = false
 
+# NOTE: No ARM64 build yet
+[[tool.uv.index]]
+name = "paddlepaddle-cuda"
+# Use PaddlePaddle built for NVIDIA Toolkit version 13.0.
+# Available versions: https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html
+url = "https://www.paddlepaddle.org.cn/packages/stable/cu130"
+# Only use this index when explicitly requested by `tool.uv.sources`.
+explicit = false

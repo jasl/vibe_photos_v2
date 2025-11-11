@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Search - AI Photos Management{% endblock %}
+
+{% block content %}
+<div class="search-box">
+    <form method="GET" action="/search">
+        <input type="text" name="q" value="{{ query }}" placeholder="Search photos by tags, text, or semantic meaning..." required>
+        
+        <div class="filters">
+            <div class="filter-group">
+                <label>Search Mode</label>
+                <select name="mode">
+                    <option value="hybrid" {% if mode == 'hybrid' %}selected{% endif %}>Hybrid (Recommended)</option>
+                    <option value="keyword" {% if mode == 'keyword' %}selected{% endif %}>Keyword Only</option>
+                    <option value="semantic" {% if mode == 'semantic' %}selected{% endif %}>Semantic Only</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label>Categories (Multi-select)</label>
+                <select name="category" multiple style="height: 100px;">
+                    {% for cat in all_categories %}
+                    <option value="{{ cat.name }}" {% if cat.name in selected_categories %}selected{% endif %}>
+                        {{ cat.name|capitalize }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        
+        <button type="submit" class="btn" style="margin-top: 1rem; width: 100%;">🔍 Search</button>
+    </form>
+</div>
+
+{% if results %}
+<div class="stats">
+    <h2>Search Results</h2>
+    <p>Found {{ results.total }} results for "{{ query }}" | Mode: {{ results.mode|capitalize }} | Page {{ results.page }}</p>
+</div>
+
+{% if results.results %}
+<div class="grid">
+    {% for item in results.results %}
+    <div class="card">
+        <a href="/photo/{{ item.photo.id }}">
+            <img src="/thumbnail/{{ item.photo.id }}" alt="{{ item.photo.filename }}" loading="lazy">
+        </a>
+        <div class="card-content">
+            <h3 style="font-size: 0.875rem; margin-bottom: 0.5rem;">{{ item.photo.filename }}</h3>
+            <p style="font-size: 0.75rem; color: #666; margin-bottom: 0.5rem;">
+                Score: {{ "%.3f"|format(item.score) }}
+            </p>
+            {% if item.matched_tags %}
+            <div style="margin-top: 0.5rem;">
+                {% for tag in item.matched_tags[:5] %}
+                <span class="tag">{{ tag }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if item.ocr_snippet %}
+            <p style="font-size: 0.75rem; color: #999; margin-top: 0.5rem;">
+                {{ item.ocr_snippet }}
+            </p>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if results.total > results.page_size %}
+<div class="pagination">
+    {% if results.page > 1 %}
+        <a href="/search?q={{ query }}&mode={{ mode }}&page={{ results.page - 1 }}">← Previous</a>
+    {% endif %}
+    
+    {% set total_pages = (results.total + results.page_size - 1) // results.page_size %}
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == results.page %}
+            <a href="/search?q={{ query }}&mode={{ mode }}&page={{ p }}" class="active">{{ p }}</a>
+        {% elif p == 1 or p == total_pages or (p >= results.page - 2 and p <= results.page + 2) %}
+            <a href="/search?q={{ query }}&mode={{ mode }}&page={{ p }}">{{ p }}</a>
+        {% elif p == results.page - 3 or p == results.page + 3 %}
+            <span>...</span>
+        {% endif %}
+    {% endfor %}
+    
+    {% if results.page < total_pages %}
+        <a href="/search?q={{ query }}&mode={{ mode }}&page={{ results.page + 1 }}">Next →</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="stats">
+    <p>No results found for "{{ query }}"</p>
+</div>
+{% endif %}
+
+{% elif query %}
+<div class="stats">
+    <p>No results found.</p>
+</div>
+{% endif %}
+{% endblock %}
+

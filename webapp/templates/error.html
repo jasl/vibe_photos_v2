@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Error - AI Photos Management{% endblock %}
+
+{% block content %}
+<div style="background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center;">
+    <h1 style="color: #dc2626; margin-bottom: 1rem;">⚠️ Error</h1>
+    <p style="color: #666; margin-bottom: 2rem;">{{ error }}</p>
+    <a href="/" class="btn">← Back to Gallery</a>
+</div>
+{% endblock %}
+
