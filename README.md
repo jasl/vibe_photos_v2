@@ -441,11 +441,17 @@ The system implements Redis caching for:
 
 ## License
 
-This project is for personal use. AI models have their own licenses:
-- RAM++: Apache 2.0
-- OpenCLIP: MIT
-- PaddleOCR: Apache 2.0
-- InsightFace: MIT/Apache 2.0
+This project is licensed under **AGPL-3.0** (GNU Affero General Public License v3.0).
+
+### AI Models Licenses
+
+The integrated AI models have their own licenses:
+- **RAM++**: Apache 2.0
+- **OpenCLIP**: MIT
+- **PaddleOCR**: Apache 2.0
+- **InsightFace**: MIT/Apache 2.0
+
+See the `LICENSE` file for the full AGPL-3.0 license text.
 
 ## Support
 
