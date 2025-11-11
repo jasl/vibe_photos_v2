@@ -103,6 +103,10 @@ nano .env
 - `POSTGRES_PASSWORD`: Change from default for production
 - `SECRET_KEY`: Generate a random secret key for Flask
 - `CELERY_WORKER_CONCURRENCY`: Set to 4 for DGX Spark, 1 for 16GB GPU
+- `NOISY_DETECTION_TAGS`: Comma-separated list of object tags that require stricter filtering (default: `person`)
+- `NOISY_TAG_MIN_AREA_RATIO`: Minimum relative bounding-box area required for noisy tags (default: `0.02`)
+- `NOISY_TAG_MIN_CONFIDENCE`: Minimum detection confidence for noisy tags (default: `0.35`)
+- `NOISY_TAG_MAX_INSTANCES`: Maximum number of noisy detections to keep per tag (default: `3`, set to `0` to disable limiting)
 
 ### Step 5: Download AI Models
 

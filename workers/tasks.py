@@ -17,6 +17,8 @@ from models import (
     PhotoState, get_session
 )
 from utils import process_image_for_storage, ImageConversionError
+from config import settings
+from workers.object_filtering import filter_detected_objects
 
 logger = logging.getLogger(__name__)
 
@@ -105,20 +107,30 @@ def process_single_image(self, photo_id: int):
             image = Image.open(image_path)
             
             detected_objects = ai_models.recognize_objects(image)
-            
+            image_width, image_height = image.size
+
+            filtered_objects, filtered_out = filter_detected_objects(
+                detected_objects, image_width, image_height
+            )
+            if filtered_out:
+                logger.info(
+                    "Filtered out %s detections due to area/conf thresholds",
+                    filtered_out
+                )
+
             # Deduplicate tags for PhotoTag (keep highest confidence per tag)
             unique_tags = {}
-            for obj in detected_objects:
+            for obj in filtered_objects:
                 tag = obj['tag']
                 if tag not in unique_tags or obj['confidence'] > unique_tags[tag]['confidence']:
                     unique_tags[tag] = obj
-            
+
             # Find category for tags (do this once for all tags)
             tag_category_map = {}
             for tag in unique_tags.keys():
                 tag_mapping = session.query(TagCategoryMapping).filter_by(tag=tag).first()
                 tag_category_map[tag] = tag_mapping.category_id if tag_mapping else None
-            
+
             # Save unique tags to PhotoTag
             for tag, obj in unique_tags.items():
                 photo_tag = PhotoTag(
@@ -128,9 +140,9 @@ def process_single_image(self, photo_id: int):
                     category_id=tag_category_map[tag]
                 )
                 session.add(photo_tag)
-            
+
             # Save all instances to DetectedObject (with bbox)
-            for obj in detected_objects:
+            for obj in filtered_objects:
                 tag = obj['tag']
                 detected_obj = DetectedObject(
                     photo_id=photo_id,
@@ -140,12 +152,17 @@ def process_single_image(self, photo_id: int):
                     bbox=obj.get('bbox')  # DETR already returns this
                 )
                 session.add(detected_obj)
-            
+
             session.commit()
-            results['detected_objects_count'] = len(detected_objects)
+            results['detected_objects_count'] = len(filtered_objects)
+            results['filtered_out_objects_count'] = filtered_out
             results['unique_tags_count'] = len(unique_tags)
             results['steps_completed'].append('objects')
-            logger.info(f"✓ Detected {len(detected_objects)} objects ({len(unique_tags)} unique tags)")
+            logger.info(
+                "✓ Detected %s objects after filtering (%s unique tags)",
+                len(filtered_objects),
+                len(unique_tags)
+            )
             
         except Exception as e:
             logger.error(f"✗ Object recognition failed: {e}")
@@ -278,7 +295,6 @@ def process_single_image(self, photo_id: int):
                     # Calculate Hamming distance
                     distance = sum(c1 != c2 for c1, c2 in zip(current_hash.pdq_hash, other_hash.pdq_hash))
                     
-                    from config import settings
                     if distance <= settings.DUPLICATE_THRESHOLD:
                         # Check if duplicate relationship already exists
                         existing = session.query(Duplicate).filter(
